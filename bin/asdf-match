@@ -1,0 +1,60 @@
+#!/bin/sh
+
+set -eu
+
+asdfmatch_current_version_kubectl() {
+    kubectl version --client=true --output=json |
+        jq -r '.clientVersion.gitVersion' |
+        sed 's/^v\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/'
+}
+
+asdfmatch_desired_version_kubectl() {
+    v=$(kubectl version --output=json)
+    printf '%s' "$v" |
+        jq -re '.serverVersion.gitVersion' |
+        sed 's/^v\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/'
+}
+
+export ASDFMATCH_DESIRED_VER_KUBECTL=asdfmatch_desired_version_kubectl
+
+debug () {
+    (PS4=':'; set -x; : "$@")
+    "$@"
+}
+
+current_version() {
+    plugin=$1
+    if which "asdfmatch_current_version_${plugin}"; then
+        "asdfmatch_current_version_${plugin}"
+    else
+        asdf current "$plugin" | awk '{print $2}'
+    fi
+}
+
+desired_version() {
+    PLUGIN=$(printf '%s' "$1" | tr 'a-z-' 'A-Z_' | sed 's/"/\\"/g')
+    eval '"$ASDFMATCH_DESIRED_VER_'"${PLUGIN}"'"'
+}
+
+use() {
+    plugin=$1
+    version=$2
+    if ! asdf current "$plugin" >/dev/null; then
+        debug asdf plugin add "$package"
+    fi
+    if ! asdf list "$plugin" "$version" >/dev/null; then
+        debug asdf install "$package" "$version"
+    fi
+    debug asdf global "$package" "$desired"
+}
+
+package=$1
+desired=$(desired_version "$package")
+current=$(current_version "$package")
+if [ "$current" = "$desired" ]; then
+    return
+fi
+
+use "$package" "$desired"
+current=$(current_version "$package")
+test "$current" = "$desired"
