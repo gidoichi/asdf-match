@@ -15,38 +15,86 @@ asdfmatch_desired_version_kubectl() {
         sed 's/^v\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/'
 }
 
-export ASDFMATCH_DESIRED_VER_KUBECTL=asdfmatch_desired_version_kubectl
+export ASDFMATCH_DESIRED_VER_FUNC_KUBECTL=asdfmatch_desired_version_kubectl
 
-debug () {
-    (PS4=':'; set -x; : "$@")
-    "$@"
+debug() {
+    level=1
+    while :; do
+        case "${1:-}" in
+            -*)
+                if printf '%s' "$1" | grep -v '^-[0-9]\{1,\}$' >/dev/null; then
+                    continue
+                fi
+                level="${1#-}"
+                shift;;
+            --) shift; break;;
+            *)  break;;
+        esac
+    done
+
+    if [ "$level" -le "$verbose" ] 2>/dev/null; then
+        (PS4=':'; set -x; : "$@")
+        res=$("$@")
+        ret=$?
+        printf '%s\n' "$res" 1>&2
+        return "$ret"
+    else
+        "$@"
+    fi
+}
+
+to_upper_snake_case() {
+    tr 'a-z-' 'A-Z_' | grep '^[A-Z_]*$'
 }
 
 current_version() {
     plugin=$1
-    if which "asdfmatch_current_version_${plugin}"; then
-        "asdfmatch_current_version_${plugin}"
+    PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
+    ASDFMATCH_CURRENT_VER_FUNC='"${ASDFMATCH_CURRENT_VER_FUNC_'"$PLUGIN"'}"'
+    if (eval : "$ASDFMATCH_CURRENT_VER_FUNC" 2>/dev/null); then
+        eval debug "$ASDFMATCH_CURRENT_VER_FUNC"
     else
-        asdf current "$plugin" | awk '{print $2}'
+        current=$(debug -2 asdf current "$plugin")
+        printf '%s' "$current" | awk '{print $2}'
     fi
 }
 
 desired_version() {
-    PLUGIN=$(printf '%s' "$1" | tr 'a-z-' 'A-Z_' | sed 's/"/\\"/g')
-    eval '"$ASDFMATCH_DESIRED_VER_'"${PLUGIN}"'"'
+    plugin=$1
+    PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
+    ASDFMATCH_DESIRED_VER_FUNC='"${ASDFMATCH_DESIRED_VER_FUNC_'"$PLUGIN"'}"'
+    eval debug "$ASDFMATCH_DESIRED_VER_FUNC"
 }
 
 use() {
     plugin=$1
     version=$2
-    if ! asdf current "$plugin" >/dev/null; then
+    if ! debug -2 asdf current "$plugin" >/dev/null; then
         debug asdf plugin add "$package"
     fi
-    if ! asdf list "$plugin" "$version" >/dev/null; then
+    if ! debug -2 asdf list "$plugin" "$version" >/dev/null; then
         debug asdf install "$package" "$version"
     fi
     debug asdf global "$package" "$desired"
 }
+
+verbose=0
+while :; do
+    case "${1:-}" in
+        -v*)
+            if printf '%s' "$1" | grep -v '^-v*$' >/dev/null; then
+                echo "${0##*/}: invalid option: ${1:-}" 1>&2
+                return 1
+            fi
+            verbose=$(printf '%s' "$1" | sed 's/^-//' | wc -c)
+            shift;;
+        --) shift; break;;
+        --*|-*)
+            echo "${0##*/}: invalid option: ${1:-}" 1>&2
+            return 1;;
+        *)  break;;
+    esac
+done
 
 package=$1
 desired=$(desired_version "$package")
