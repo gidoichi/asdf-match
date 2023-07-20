@@ -1,0 +1,100 @@
+#!/bin/sh
+
+set -eu
+PARENT="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d."; pwd)"
+
+debug() {
+    level=1
+    while :; do
+        case "${1:-}" in
+            --) shift; break;;
+            -*)
+                if printf '%s' "$1" | grep -v '^-[0-9]\{1,\}$' >/dev/null; then
+                    continue
+                fi
+                level="${1#-}"
+                shift;;
+            *)  break;;
+        esac
+    done
+
+    if [ "$level" -le "$verbose" ] 2>/dev/null; then
+        (PS4=':'; set -x; : "$@")
+        res=$("$@")
+        ret=$?
+        printf '%s\n' "$res"
+        return "$ret"
+    else
+        "$@"
+    fi
+}
+
+load_plugins() {
+    eval "$(find "${PARENT}/../plugins" -name '*.sh' | xargs cat)"
+}
+
+to_upper_snake_case() {
+    tr 'a-z-' 'A-Z_' | grep '^[A-Z_]*$'
+}
+
+current_version() {
+    plugin=$1
+    PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
+    ASDFMATCH_CURRENT_VER_FUNC='"${ASDFMATCH_CURRENT_VER_FUNC_'"$PLUGIN"'}"'
+    if (eval : "$ASDFMATCH_CURRENT_VER_FUNC" 2>/dev/null); then
+        eval debug "$ASDFMATCH_CURRENT_VER_FUNC"
+    else
+        current=$(debug -2 asdf current "$plugin")
+        printf '%s' "$current" | awk '{print $2}'
+    fi
+}
+
+desired_version() {
+    plugin=$1
+    PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
+    ASDFMATCH_DESIRED_VER_FUNC='"${ASDFMATCH_DESIRED_VER_FUNC_'"$PLUGIN"'}"'
+    eval debug "$ASDFMATCH_DESIRED_VER_FUNC"
+}
+
+use() {
+    plugin=$1
+    version=$2
+    if ! debug -2 asdf current "$plugin" >/dev/null; then
+        debug asdf plugin add "$package"
+    fi
+    if ! debug -2 asdf list "$plugin" "$version" >/dev/null; then
+        debug asdf install "$package" "$version"
+    fi
+    debug asdf global "$package" "$version"
+}
+
+verbose=0
+while :; do
+    case "${1:-}" in
+        -v*)
+            if printf '%s' "$1" | grep -v '^-v*$' >/dev/null; then
+                echo "${0##*/}: invalid option: ${1:-}" 1>&2
+                return 1
+            fi
+            verbose=$(printf '%s' "$1" | sed 's/^-//' | wc -c | tr -d ' ')
+            shift;;
+        --) shift; break;;
+        --*|-*)
+            echo "${0##*/}: invalid option: ${1:-}" 1>&2
+            return 1;;
+        *)  break;;
+    esac
+done
+
+load_plugins
+
+package=$1
+desired=$(desired_version "$package")
+current=$(current_version "$package")
+if [ "$current" = "$desired" ]; then
+    exit
+fi
+
+use "$package" "$desired"
+current=$(current_version "$package")
+test "$current" = "$desired"
