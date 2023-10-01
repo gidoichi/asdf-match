@@ -4,7 +4,7 @@ set -eu
 PARENT="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d."; pwd)"
 
 debug() {
-    (PS4=':'; set -x; : "$@")
+    (PS4=''; set -x; : "$@")
     res=$("$@")
     ret=$?
     if [ -n "$res" ]; then
