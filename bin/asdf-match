@@ -4,29 +4,13 @@ set -eu
 PARENT="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d."; pwd)"
 
 debug() {
-    level=1
-    while :; do
-        case "${1:-}" in
-            --) shift; break;;
-            -*)
-                if printf '%s' "$1" | grep -v '^-[0-9]\{1,\}$' >/dev/null; then
-                    continue
-                fi
-                level="${1#-}"
-                shift;;
-            *)  break;;
-        esac
-    done
-
-    if [ "$level" -le "$verbose" ] 2>/dev/null; then
-        (PS4=':'; set -x; : "$@")
-        res=$("$@")
-        ret=$?
-        printf '%s\n' "$res"
-        return "$ret"
-    else
-        "$@"
+    (PS4=':'; set -x; : "$@")
+    res=$("$@")
+    ret=$?
+    if [ -n "$res" ]; then
+        printf '%s\n' "$res" | tee /dev/stderr
     fi
+    return "$ret"
 }
 
 load_plugins() {
@@ -44,7 +28,7 @@ current_version() {
     if (eval : "$ASDFMATCH_CURRENT_VER_FUNC" 2>/dev/null); then
         eval debug "$ASDFMATCH_CURRENT_VER_FUNC"
     else
-        current=$(debug -2 asdf current "$plugin")
+        current=$(debug asdf current "$plugin")
         printf '%s' "$current" | awk '{print $2}'
     fi
 }
@@ -59,32 +43,14 @@ desired_version() {
 use() {
     plugin=$1
     version=$2
-    if ! debug -2 asdf current "$plugin" >/dev/null; then
+    if ! asdf current "$plugin" >/dev/null; then
         debug asdf plugin add "$package"
     fi
-    if ! debug -2 asdf list "$plugin" "$version" >/dev/null; then
+    if ! asdf list "$plugin" "$version" >/dev/null; then
         debug asdf install "$package" "$version"
     fi
     debug asdf global "$package" "$version"
 }
-
-verbose=0
-while :; do
-    case "${1:-}" in
-        -v*)
-            if printf '%s' "$1" | grep -v '^-v*$' >/dev/null; then
-                echo "${0##*/}: invalid option: ${1:-}" 1>&2
-                return 1
-            fi
-            verbose=$(printf '%s' "$1" | sed 's/^-//' | wc -c | tr -d ' ')
-            shift;;
-        --) shift; break;;
-        --*|-*)
-            echo "${0##*/}: invalid option: ${1:-}" 1>&2
-            return 1;;
-        *)  break;;
-    esac
-done
 
 load_plugins
 
