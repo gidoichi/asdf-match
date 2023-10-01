@@ -3,14 +3,59 @@
 set -eu
 PARENT="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d."; pwd)"
 
+DEFAULT_LOG_LEVEL=info
+
+loglevel_to_ordinal_scale() {
+    [ $# -ne 1 ] && return 1
+    l=$1
+    case "$l" in
+        notice) l=1 ;;
+        info)   l=2 ;;
+        debug)  l=3 ;;
+        *)      return 1 ;;
+    esac
+    printf '%d' "$l"
+}
+
 debug() {
-    (PS4=''; set -x; : "$@")
-    res=$("$@")
-    ret=$?
-    if [ -n "$res" ]; then
-        printf '%s\n' "$res" | tee /dev/stderr
+    level=0
+    debug=true
+    stderr=false
+
+    while :; do
+        case "${1:-}" in
+            --) shift; break;;
+            --level=*)
+                level=$(loglevel_to_ordinal_scale "${1#--level=}")
+                shift
+                if [ "$level" -gt "$LOG_LEVEL" ]; then
+                    debug=false
+                fi
+                ;;
+            -s)
+                stderr=true
+                shift
+                ;;
+            *)  break;;
+        esac
+    done
+    if [ "$debug" != 'true' ]; then
+        stderr=false
     fi
-    return "$ret"
+
+    [ "$debug" = 'true' ] && (PS4=''; set -x; : "$@")
+    if [ "$stderr" = 'true' ]; then
+        res=$("$@")
+        ret=$?
+        if [ -n "$res" ]; then
+            printf '%s\n' "$res" >&2
+            printf '%s\n' "$res"
+        fi
+        return "$ret"
+    else
+        "$@"
+        return
+    fi
 }
 
 load_plugins() {
@@ -26,9 +71,9 @@ current_version() {
     PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
     ASDFMATCH_CURRENT_VER_FUNC='"${ASDFMATCH_CURRENT_VER_FUNC_'"$PLUGIN"'}"'
     if (eval : "$ASDFMATCH_CURRENT_VER_FUNC" 2>/dev/null); then
-        eval debug "$ASDFMATCH_CURRENT_VER_FUNC"
+        eval debug --level=debug -s "$ASDFMATCH_CURRENT_VER_FUNC"
     else
-        current=$(debug asdf current "$plugin")
+        current=$(debug --level=info -s asdf current "$plugin")
         printf '%s' "$current" | awk '{print $2}'
     fi
 }
@@ -37,20 +82,32 @@ desired_version() {
     plugin=$1
     PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
     ASDFMATCH_DESIRED_VER_FUNC='"${ASDFMATCH_DESIRED_VER_FUNC_'"$PLUGIN"'}"'
-    eval debug "$ASDFMATCH_DESIRED_VER_FUNC"
+    eval debug --level=info -s "$ASDFMATCH_DESIRED_VER_FUNC"
 }
 
 use() {
     plugin=$1
     version=$2
-    if ! asdf current "$plugin" >/dev/null; then
-        debug asdf plugin add "$package"
+    if ! debug --level=debug -s asdf current "$plugin" >/dev/null; then
+        debug --level=notice asdf plugin add "$package"
     fi
-    if ! asdf list "$plugin" "$version" >/dev/null; then
-        debug asdf install "$package" "$version"
+    if ! debug --level=debug -s asdf list "$plugin" "$version" >/dev/null; then
+        debug --level=notice asdf install "$package" "$version"
     fi
-    debug asdf global "$package" "$version"
+    debug --level=notice asdf global "$package" "$version"
 }
+
+LOG_LEVEL=$(loglevel_to_ordinal_scale "$DEFAULT_LOG_LEVEL")
+while :; do
+    case "${1:-}" in
+        --) shift; break;;
+        --log=*)
+            LOG_LEVEL=$(loglevel_to_ordinal_scale "${1#--log=}")
+            shift
+            ;;
+        *)  break;;
+    esac
+done
 
 load_plugins
 
