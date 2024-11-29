@@ -2,6 +2,7 @@
 
 set -eu
 PARENT="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d."; pwd)"
+export ASDFMATCH_DESIRED_VER_FUNC_KUBECTL="${PARENT}/../plugins/kubectl_desired_version.sh"
 
 DEFAULT_LOG_LEVEL=info
 

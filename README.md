@@ -14,13 +14,15 @@ curo -o /usr/local/bin/asdf-match https://raw.githubusercontent.com/gidoichi/asd
 ```
 
 ## Configuration
-You only need to define a function outputs desired version for each plugins and expose the function using environment variables named `ASDFMATCH_DESIRED_VER_FNC_${NAME}` (`${NAME}` should be UPPER_CAMMEL_CASE of the plugin.)
+You only need to define a command outputs desired version for each plugins and set the command to the environment variable named `ASDFMATCH_DESIRED_VER_FUNC_${NAME}` (`${NAME}` should be UPPER_CAMMEL_CASE of the plugin.)
 
 ```sh
-desired_version() {
-    echo '1.0.0'
-}
-export "ASDFMATCH_DESIRED_VER_FUNC_${NAME}"=desired_version
+export "ASDFMATCH_DESIRED_VER_FUNC_${NAME}"=/path/to/desired_version
+chmod +x "ASDFMATCH_DESIRED_VER_FUNC_${NAME}"
+cat <<EOF > "ASDFMATCH_DESIRED_VER_FUNC_${NAME}"
+#!/bin/sh
+echo '1.0.0'
+EOF
 ```
 
 Optionally, when `ASDFMATCH_CURRENT_VER_FUNC_${NAME}` environment variable is defined, this functions is used to detect current CLI tool version.
@@ -33,13 +35,15 @@ Fortunately [kube-ps1](https://github.com/jonmosco/kube-ps1) calls `KUBE_PS1_CLU
 So, with following settings in your shell initialization scripts (e.g. .bashrc) you no longer types `asdf global kubectl <version>`.
 
 ```sh
-asdfmatch_desired_version_kubectl() {
-    v=$(kubectl version --output=json)
-    printf '%s' "$v" |
-        jq -re '.serverVersion.gitVersion' |
-        sed 's/^v\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/'
-}
-export ASDFMATCH_DESIRED_VER_FUNC_KUBECTL=asdfmatch_desired_version_kubectl
+export ASDFMATCH_DESIRED_VER_FUNC_KUBECTL="$HOME/.local/bin/kubectl_desired_version.sh"
+chmod +x "$ASDFMATCH_DESIRED_VER_FUNC_KUBECTL"
+cat <<EOF > "$ASDFMATCH_DESIRED_VER_FUNC_KUBECTL"
+#!/bin/sh
+v=$(kubectl version --output=json)
+printf '%s' "$v" |
+    jq -re '.serverVersion.gitVersion' |
+    sed 's/^v\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/'
+EOF
 
 kube_ps1_cluster_function() {
     printf '%s' "$1"
