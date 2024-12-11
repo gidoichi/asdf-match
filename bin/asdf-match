@@ -59,10 +59,6 @@ debug() {
     fi
 }
 
-load_plugins() {
-    eval "$(find "${PARENT}/../plugins" -name '*.sh' | xargs cat)"
-}
-
 to_upper_snake_case() {
     tr 'a-z-' 'A-Z_' | grep '^[A-Z_]*$'
 }
@@ -109,8 +105,6 @@ while :; do
         *)  break;;
     esac
 done
-
-load_plugins
 
 package=$1
 desired=$(desired_version "$package")
