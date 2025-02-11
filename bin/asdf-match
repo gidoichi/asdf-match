@@ -91,7 +91,7 @@ use() {
     if ! debug --level=debug -s asdf list "$plugin" "$version" >/dev/null; then
         debug --level=notice asdf install "$package" "$version"
     fi
-    debug --level=notice asdf global "$package" "$version"
+    debug --level=notice asdf set --home "$package" "$version"
 }
 
 LOG_LEVEL=$(loglevel_to_ordinal_scale "$DEFAULT_LOG_LEVEL")
