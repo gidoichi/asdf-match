@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -eu
+
 v=$(kubectl version --output=json)
 printf '%s' "$v" |
     jq -re '.serverVersion.gitVersion' |
