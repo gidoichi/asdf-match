@@ -70,7 +70,7 @@ current_version() {
     if (eval : "$ASDFMATCH_CURRENT_VER_FUNC" 2>/dev/null); then
         eval debug --level=debug -s "$ASDFMATCH_CURRENT_VER_FUNC"
     else
-        current=$(debug --level=info -s asdf current "$plugin")
+        current=$(debug --level=info -s asdf current --no-header "$plugin")
         printf '%s' "$current" | awk '{print $2}'
     fi
 }
