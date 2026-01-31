@@ -63,6 +63,25 @@ to_upper_snake_case() {
     tr 'a-z-' 'A-Z_' | grep '^[A-Z_]*$'
 }
 
+version() {
+    asdf version | cut -d ' ' -f 1 | sed 's/\./ /g'
+}
+
+added() {
+    plugin=$1
+    debug --level=debug -s asdf current "$plugin" >/dev/null 2>&1
+}
+
+installed() {
+    plugin=$1
+    version=$2
+    if version | awk '{exit !($1<="0" && $2<="17")}' >/dev/null; then
+        debug --level=debug -s asdf list "$plugin" "$version" >/dev/null 2>&1
+        return
+    fi
+    debug --level=debug -s asdf where "$plugin" "$version" >/dev/null 2>&1
+}
+
 current_version() {
     plugin=$1
     PLUGIN=$(printf '%s' "$plugin" | to_upper_snake_case)
@@ -85,10 +104,10 @@ desired_version() {
 use() {
     plugin=$1
     version=$2
-    if ! debug --level=debug -s asdf current "$plugin" >/dev/null; then
+    if ! added "$plugin"; then
         debug --level=notice asdf plugin add "$package"
     fi
-    if ! debug --level=debug -s asdf list "$plugin" "$version" >/dev/null; then
+    if ! installed "$plugin" "$version"; then
         debug --level=notice asdf install "$package" "$version"
     fi
     debug --level=notice asdf set --home "$package" "$version"
